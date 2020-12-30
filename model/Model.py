@@ -32,11 +32,9 @@ class PTransD(BaseModule):
         self.norm_flag = norm_flag
         self.ent_tot = ent_tot
         self.rel_tot = rel_tot
-        self.kl_rate = nn.Parameter(torch.Tensor([kl_rate]))
-        self.kl_rate.requires_grad = False
+        self.kl_rate = kl_rate
         self.batch_size = batch_size
-        self.regul_rate = nn.Parameter(torch.Tensor([regul_rate]))
-        self.regul_rate.requires_grad = False
+        self.regul_rate = regul_rate
 
 
         #存储固定大小的词典的嵌入向量查找表
@@ -215,7 +213,7 @@ class PTransD(BaseModule):
         n_score = self._get_negative_score(score)
         loss_res = self.hinge_loss(p_score, n_score)
         if self.regul_rate != 0:
-            loss_res += self.regul_rate * self.regularization(data)+self.kl_rate*self.kldiv(data)
+            loss_res = (1-self.kl_rate)*loss_res+self.kl_rate*self.kldiv(data)+self.regul_rate * self.regularization(data)
         return loss_res
 
     def kldiv(self,data):

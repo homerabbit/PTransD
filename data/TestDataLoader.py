@@ -33,9 +33,9 @@ class TestDataSampler(object):
 #导入数据,只选取一个负例
 class TestDataLoader(object):
 
-    def __init__(self,in_path,entity_set,train_triple,Filt_flag = True,sample_mode = "link"):
+    def __init__(self,in_path,test_file,entity_set,train_triple,Filt_flag = True,sample_mode = "link"):
 
-        self.test_file = in_path + "test2id.txt"
+        self.test_file = in_path + test_file
         self.entity_set = entity_set
         self.test_triple = []
         self.Filt_flag = Filt_flag
