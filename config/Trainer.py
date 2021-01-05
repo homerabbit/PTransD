@@ -23,7 +23,7 @@ class Trainer(object):
 				train_times=1000,
 				alpha=0.5,
 				use_gpu=False,
-				opt_method="sgd",
+				opt_method="Adadelta",
 				save_steps=None,
 				checkpoint_dir=None):
 
@@ -96,6 +96,7 @@ class Trainer(object):
 			for data in self.data_loader:
 				loss = self.train_one_step(data)
 				res += loss
+				print("epoch:{} | res:{} ".format(epoch,res))
 			training_range.set_description("Epoch %d | loss: %f" % (epoch, res))
 
 

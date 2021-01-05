@@ -55,7 +55,6 @@ class TestDataLoader(object):
 
                 self.test_triple.append([h_, t_, r_])
 
-        self.tripleTol = len(self.test_triple) #采样的三元组数，没有出现在实体集合的删除
 
     #得到Filt的三元组(过滤掉所有出现在训练集的三元组）
     def get_filted_triple(self,entity_set,total):
@@ -64,24 +63,20 @@ class TestDataLoader(object):
         tail_triple_dict = {"batch_h":[],"batch_t":[],"batch_r":[],"mode":"tail_batch"}
 
         triple = self.test_triple[total-1]
-        if (triple[0] not in entity_set) or (triple[1] not in entity_set):
-            self.tripleTol = self.tripleTol - 1
-            return None,[["_","_"]]
-        else:
-            for entity in entity_set:
-                corrupted_head = [entity, triple[1], triple[2]]
-                if corrupted_head not in self.train_triple:
-                    head_triple_dict["batch_h"].append(corrupted_head[0])
-                    head_triple_dict["batch_t"].append(corrupted_head[1])
-                    head_triple_dict["batch_r"].append(corrupted_head[2])
+        for entity in entity_set:
+            corrupted_head = [entity, triple[1], triple[2]]
+            if corrupted_head not in self.train_triple:
+                head_triple_dict["batch_h"].append(corrupted_head[0])
+                head_triple_dict["batch_t"].append(corrupted_head[1])
+                head_triple_dict["batch_r"].append(corrupted_head[2])
 
-                corrupted_tail = [triple[0], entity, triple[2]]
-                if corrupted_head not in self.train_triple:
-                    tail_triple_dict["batch_h"].append(corrupted_tail[0])
-                    tail_triple_dict["batch_t"].append(corrupted_tail[1])
-                    tail_triple_dict["batch_r"].append(corrupted_tail[2])
-            corrupt_triple_list = [head_triple_dict,tail_triple_dict]
-            return (triple,corrupt_triple_list)
+            corrupted_tail = [triple[0], entity, triple[2]]
+            if corrupted_head not in self.train_triple:
+                tail_triple_dict["batch_h"].append(corrupted_tail[0])
+                tail_triple_dict["batch_t"].append(corrupted_tail[1])
+                tail_triple_dict["batch_r"].append(corrupted_tail[2])
+        corrupt_triple_list = [head_triple_dict,tail_triple_dict]
+        return (triple,corrupt_triple_list)
 
     #得到Raw的三元组
     def get_raw_triple(self, entity_set,total):
@@ -90,23 +85,19 @@ class TestDataLoader(object):
         tail_triple_dict = {"batch_h": [], "batch_t": [], "batch_r": [], "mode": "tail_batch"}
 
         triple = self.test_triple[total-1]
-        if (triple[0] not in entity_set) or (triple[1] not in entity_set):
-            self.tripleTol = self.tripleTol-1
-            return None,[["_","_"]]
-        else:
-            for entity in entity_set:
-                corrupted_head = [entity, triple[1], triple[2]]
-                head_triple_dict["batch_h"].append(corrupted_head[0])
-                head_triple_dict["batch_t"].append(corrupted_head[1])
-                head_triple_dict["batch_r"].append(corrupted_head[2])
+        for entity in entity_set:
+            corrupted_head = [entity, triple[1], triple[2]]
+            head_triple_dict["batch_h"].append(corrupted_head[0])
+            head_triple_dict["batch_t"].append(corrupted_head[1])
+            head_triple_dict["batch_r"].append(corrupted_head[2])
 
-                corrupted_tail = [triple[0], entity, triple[2]]
-                tail_triple_dict["batch_h"].append(corrupted_tail[0])
-                tail_triple_dict["batch_t"].append(corrupted_tail[1])
-                tail_triple_dict["batch_r"].append(corrupted_tail[2])
-            corrupt_triple_list = [head_triple_dict,tail_triple_dict]
+            corrupted_tail = [triple[0], entity, triple[2]]
+            tail_triple_dict["batch_h"].append(corrupted_tail[0])
+            tail_triple_dict["batch_t"].append(corrupted_tail[1])
+            tail_triple_dict["batch_r"].append(corrupted_tail[2])
+        corrupt_triple_list = [head_triple_dict,tail_triple_dict]
 
-            return (triple,corrupt_triple_list)
+        return (triple,corrupt_triple_list)
 
     def sample_lp(self,total):
         if self.Filt_flag !=False:
@@ -119,36 +110,32 @@ class TestDataLoader(object):
         test_triple_dict = {"batch_h": [], "batch_t": [], "batch_r": [], "batch_y": []}
 
         triple = self.test_triple[total-1]
-        if (triple[0] not in self.entity_set) or (triple[1] not in self.entity_set):
-            self.tripleTol = self.tripleTol - 1
-            return None
+        corrupted_triple = copy.deepcopy(triple)
+        if random.random() > 0.5:
+            # 替换head
+            rand_head = triple[0]  #可改进，因为没有过滤掉所有正例
+            while (rand_head == triple[0]):#避免triple = corrupted_triple
+                rand_head = random.sample(list(self.entity_set), 1)[0]  # [0]变成元素值
+            corrupted_triple[0] = rand_head
+
         else:
-            corrupted_triple = copy.deepcopy(triple)
-            if random.random() > 0.5:
-                # 替换head
-                rand_head = triple[0]  #可改进，因为没有过滤掉所有正例
-                while (rand_head == triple[0]):#避免triple = corrupted_triple
-                    rand_head = random.sample(list(self.entity_set), 1)[0]  # [0]变成元素值
-                corrupted_triple[0] = rand_head
+            # 替换tail
+            rand_tail = triple[1]
+            while rand_tail == triple[1]:
+                rand_tail = random.sample(list(self.entity_set), 1)[0]
+            corrupted_triple[1] = rand_tail
 
-            else:
-                # 替换tail
-                rand_tail = triple[1]
-                while rand_tail == triple[1]:
-                    rand_tail = random.sample(list(self.entity_set), 1)[0]
-                corrupted_triple[1] = rand_tail
+        test_triple_dict["batch_h"].insert(0,triple[0])
+        test_triple_dict["batch_t"].insert(0,triple[1])
+        test_triple_dict["batch_r"].insert(0,triple[2])
+        test_triple_dict["batch_y"].insert(0,1)
 
-            test_triple_dict["batch_h"].insert(0,triple[0])
-            test_triple_dict["batch_t"].insert(0,triple[1])
-            test_triple_dict["batch_r"].insert(0,triple[2])
-            test_triple_dict["batch_y"].insert(0,1)
+        test_triple_dict["batch_h"].append(corrupted_triple[0])
+        test_triple_dict["batch_t"].append(corrupted_triple[1])
+        test_triple_dict["batch_r"].append(corrupted_triple[2])
+        test_triple_dict["batch_y"].append(0)
 
-            test_triple_dict["batch_h"].append(corrupted_triple[0])
-            test_triple_dict["batch_t"].append(corrupted_triple[1])
-            test_triple_dict["batch_r"].append(corrupted_triple[2])
-            test_triple_dict["batch_y"].append(0)
-
-            return test_triple_dict
+        return test_triple_dict
 
     def get_triple_tot(self):
         return len(self.test_triple)

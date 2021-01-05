@@ -6,6 +6,7 @@ import torch.nn.functional as F
 import numpy as np
 from model.BasicModule import BaseModule
 from data.TrainDataLoader import TrainDataLoader
+from sklearn.cluster import MeanShift ,estimate_bandwidth
 
 class PTransD(BaseModule):
 
@@ -14,8 +15,8 @@ class PTransD(BaseModule):
                  rel_tot,
                  dim_e=100,
                  dim_r=100,
-                 p_norm=1,
-                 norm_flag=1,
+                 p_norm=1,#得分用的一范
+                 norm_flag=1,#实体向量需要单位化
                  margin=None,
                  k = 3,
                  epsilon=None,
@@ -44,8 +45,6 @@ class PTransD(BaseModule):
         self.rel_transfer = nn.Embedding(self.rel_tot, self.dim_r)
 #        self.entity_probability_matrix = nn.Embedding(self.ent_tot,self.ent_tot)
 #        self.entity_transfer_probability_matrix = nn.Embedding(self.ent_tot, self.ent_tot)
-        self.transfer_dict = {}
-        self.e_mean_dict = {}
 
         #向量满足均匀分布U~(-a,a)
         if margin == None or epsilon == None:
@@ -88,9 +87,6 @@ class PTransD(BaseModule):
         else:
             self.margin_flag = False
 
-        #运行聚类函数
-        self.cluster_kmeans(self.ent_transfer, self.k)
-
     #张量补零
     def _resize(self, tensor, axis, size):
         shape = tensor.size()
@@ -117,46 +113,32 @@ class PTransD(BaseModule):
         score = torch.norm(score, self.p_norm, -1).flatten() #求score的2范，并展开为一维Tensor
         return score
 
-    def cluster_kmeans(self,matrix_transfer, k):  # 返回{transfer标号：对应的类}
-        """k-means聚类算法
+    def meanshift(self,matrix_transfer):  # 返回{transfer标号：对应的类}
+        data = matrix_transfer.weight.data
+        transfer_dict = {}
+        e_mean_dict = {}
 
-        k       - 指定分簇数量
-        matrix_transfer      - ndarray(m, n)，m个样本的数据集，每个样本n个属性值
-        """
+        bandwidth = estimate_bandwidth(data, quantile=0.2)
+        ms = MeanShift(bandwidth = bandwidth,bin_seeding=True)
+        ms.fit(data.cpu().data.numpy())
+        for val ,label in zip(range(self.ent_tot),ms.labels_):
+            transfer_dict[val] = label
+        for i in range(len(np.unique(ms.labels_))):
+            e_mean_dict[i] = []
+        for key, category in transfer_dict.items():
+            e_mean_dict[category].append(key)
+        for category, list in e_mean_dict.items():
+            e_mean = matrix_transfer(torch.LongTensor(list))
+            e_mean = torch.mean(e_mean, dim=0)
+            e_mean = F.normalize(e_mean, p=2, dim=-1)
+            e_mean_dict[category] = e_mean
+        return transfer_dict, e_mean_dict  # 返回实体聚类每一类均值
 
-        result = torch.zeros(self.ent_tot, dtype=torch.int64)  # 存放ent_tot个样本的聚类结果
-        cores = matrix_transfer(torch.LongTensor(np.random.choice(np.arange(self.ent_tot), k, replace=False)))  # 从m个数据样本中不重复地随机选择k个样本作为质心
-
-        while True:  # 迭代计算
-            d = matrix_transfer((torch.LongTensor([[i] * k for i in range(self.ent_tot)])).flatten()).reshape(self.ent_tot,k,self.dim_e)
-            distance = torch.norm(d-cores,p=2,dim=2) # size = (ent_tot, k)，每个样本距离k个质心的距离，共有m行
-            index_min = torch.argmin(distance, dim=1)  # 每个样本距离最近的质心索引序号
-
-            if torch.equal(index_min,result):  # 如果样本聚类没有改变
-                for i in range(self.ent_tot):
-                    self.transfer_dict[i] = result[i].item() #返回{实体投影向量：聚类结果}
-                for i in range(k):
-                    self.e_mean_dict[i] = []
-                for key, category in self.transfer_dict.items():
-                    self.e_mean_dict[category].append(key)
-                for category,list in self.e_mean_dict.items():
-                    e_mean = matrix_transfer(torch.LongTensor(list))
-                    e_mean = torch.mean(e_mean,dim=0)
-                    e_mean = F.normalize(e_mean, p=2, dim=-1)
-                    self.e_mean_dict[category] = e_mean
-                return self.transfer_dict,self.e_mean_dict   #返回实体聚类每一类均值
-
-            result[:] = index_min  # 重新分类
-            for i in range(k):  # 遍历质心集
-                items = matrix_transfer(torch.LongTensor(np.argwhere(result.cpu().data.numpy()==i)))  # 找出对应当前质心的子样本集
-                cores[i] = torch.mean(items, dim=0)  # 以子样本集的均值作为当前质心的位置
-
-    def _transfer(self, e, batch_e, r_transfer):
-
+    def _transfer(self, e, batch_e, r_transfer,transfer_dict, e_mean_dict):
         mean_transfer = torch.zeros(len(batch_e),self.dim_e)
         i = 0
         for ent in batch_e:
-            mean_transfer[i] = self.e_mean_dict[self.transfer_dict[ent.item()]]
+            mean_transfer[i] = e_mean_dict[transfer_dict[ent.item()]]
             i +=1
             if i == len(batch_e):
                 break
@@ -205,8 +187,9 @@ class PTransD(BaseModule):
 #       h_transfer = self.ent_transfer(batch_h)
 #       t_transfer = self.ent_transfer(batch_t)
         r_transfer = self.rel_transfer(batch_r)
-        h = self._transfer(h, batch_h, r_transfer)
-        t = self._transfer(t, batch_t, r_transfer)
+        transfer_dict, e_mean_dict = self.meanshift(self.ent_transfer)  # 每更新一次就计算一次实体投影的平均值
+        h = self._transfer(h, batch_h, r_transfer,transfer_dict, e_mean_dict)
+        t = self._transfer(t, batch_t, r_transfer,transfer_dict, e_mean_dict)
         score = self._calc(h, t, r)
         #计算正负得分
         p_score = self._get_positive_score(score)

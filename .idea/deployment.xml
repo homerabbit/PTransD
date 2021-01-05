@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="On explicit save action" serverName="xin" remoteFilesAllowedToDisappearOnAutoupload="false" autoUploadExternalChanges="true">
+  <component name="PublishConfigData" autoUpload="On explicit save action" serverName="gdut00005730@10.22.36.125:22" remoteFilesAllowedToDisappearOnAutoupload="false" autoUploadExternalChanges="true">
     <serverData>
-      <paths name="xin">
+      <paths name="gdut00005730@10.22.36.125:22">
         <serverdata>
           <mappings>
-            <mapping deploy="/" local="$PROJECT_DIR$/.." web="/" />
+            <mapping deploy="/Users/gdut00005730/PTransD" local="$PROJECT_DIR$" web="/" />
+            <mapping local="" />
           </mappings>
         </serverdata>
       </paths>

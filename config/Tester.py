@@ -63,27 +63,30 @@ class Tester(object):
             triple = data[0]
             data_head = data[1][0]
             data_tail = data[1][1]
-            if triple ==  None:
-                continue
+
             head_score = self.test_one_step(data_head)
             order = np.argsort(head_score)
+
             for rank in order:
                 if data_head["batch_h"][rank]== triple[0]:
                     if rank<10:
                         hits10 +=1
                     rank_sum = rank_sum+rank+1
                     break
+
             tail_score = self.test_one_step(data_tail)
             order = np.argsort(tail_score)
+
             for rank in order:
                 if data_tail["batch_t"][rank] == triple[1]:
                     if rank < 10:
                         hits10 += 1
                     rank_sum = rank_sum+rank+1
                     break
-            hits10 = hits10 / 2
-            mean_rank = rank_sum / 2
-            training_range.set_description("index:%d | hits10:%f |mean_rank:%f" % (index, hits10,mean_rank))
+
+        hits10 = hits10 / 2*self.data_loader.get_triple_tot()
+        mean_rank = rank_sum / 2*self.data_loader.get_triple_tot()
+
         print(hits10,mean_rank)
         return hits10,mean_rank
 
@@ -97,16 +100,16 @@ class Tester(object):
         total_true = np.sum(ans) #正例的个数
         total_false = total_all - total_true #负例的个数
 
-        res_mx = 0.0 #不知道这是什么
+        res_mx = 0.0 #最大的acc值
         threshlod = None
         for index, [ans, score] in enumerate(res):
             if ans == 1:
                 total_current += 1.0
-            res_current = (2 * total_current + total_false - index - 1) / total_all
+            res_current = (2 * total_current + total_false - index - 1) / total_all #此时的acc值
             if res_current > res_mx:
                 res_mx = res_current
                 threshlod = score
-        return threshlod, res_mx
+        return threshlod, res_mx #acc取最大值时的score和acc
 
     def run_triple_classification(self, threshlod = None):
         self.data_loader.set_sample_mode('classification')
@@ -114,10 +117,9 @@ class Tester(object):
         ans = []
         training_range = tqdm(self.data_loader)
         for index, data in enumerate(training_range):
-            if data != None:
-                _score = self.test_one_step(data)
-                ans = ans + [1,0]
-                score = score+list(_score)
+            _score = self.test_one_step(data)
+            ans = ans + [1,0]
+            score = score+list(_score)
 
         score = np.array(score)
         ans = np.array(ans)

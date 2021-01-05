@@ -80,14 +80,14 @@ class TrainDataLoader(object):
                 else:
                     self.tail_list[t_].append(h_)
 
-                self.entity_set.add(h_)
-                self.entity_set.add(t_)
-                self.relation_set.add(r_)
+#                self.entity_set.add(h_)
+#                self.entity_set.add(t_)
+#                self.relation_set.add(r_)
                 self.triple_list.append([h_,t_,r_])
 
-            self.entTotal = len(self.entity_set)
-            self.relTotal = len(self.relation_set)
-            self.tripleTotal = len(self.triple_list)
+#            self.entTotal = len(self.entity_set) #训练集实体数目
+#            self.relTotal = len(self.relation_set) #训练集关系数目
+            self.tripleTotal = len(self.triple_list) #训练集数目
 
         total_tail_per_head = 0
         total_head_per_tail = 0
@@ -124,14 +124,14 @@ class TrainDataLoader(object):
             rand_head = triple[0]
 
             while rand_head == triple[0]:#避免triple = corrupted_triple
-                rand_head = random.sample(list(self.entity_set), 1)[0]  # [0]变成元素值
+                rand_head = random.sample(list(self.entity2id.values()), 1)[0]  # [0]变成元素值
             corrupted_triple[0] = rand_head
 
         else:
             # 替换tail
             rand_tail = triple[1]
             while rand_tail == triple[1]:
-                rand_tail = random.sample(list(self.entity_set), 1)[0]
+                rand_tail = random.sample(list(self.entity2id.values()), 1)[0]
             corrupted_triple[1] = rand_tail
 
         Tbatch['batch_h'].insert(0,triple[0])
@@ -150,9 +150,9 @@ class TrainDataLoader(object):
 
         corrupted_triple = copy.deepcopy(triple)
         if random.random() < (self.tph / (self.tph + self.hpt)):
-            corrupted_triple[0] = np.random.choice(list(self.entity_set),1)[0]
+            corrupted_triple[0] = np.random.choice(list(self.entity2id.values()),1)[0]
         else:
-            corrupted_triple[2] = np.random.choice(list(self.entity_set),1)[0]
+            corrupted_triple[2] = np.random.choice(list(self.entity2id.values()),1)[0]
 
 
         Tbatch['batch_h'].append(triple[0])
@@ -171,10 +171,10 @@ class TrainDataLoader(object):
         return TrainDataSampler(self.nbatches, self.sample)
 
     def get_ent_tot(self):
-        return self.entTotal
+        return len(self.entity2id)
 
     def get_rel_tot(self):
-        return self.relTotal
+        return len(self.relation2id)
 
     def get_triple_tot(self):
         return self.tripleTotal
