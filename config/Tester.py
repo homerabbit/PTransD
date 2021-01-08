@@ -1,20 +1,10 @@
 # _*_ coding:utf-8 _*_
 # __author: zhangxin
 import torch
-import torch.nn as nn
 from torch.autograd import Variable
-import torch.optim as optim
-import os
-import time
-import sys
-import datetime
-import ctypes
-import json
 import numpy as np
-from sklearn.metrics import roc_auc_score
-import copy
 from tqdm import tqdm
-import operator
+
 
 class Tester(object):
 

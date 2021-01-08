@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import os
 import json
-import numpy as np
+
 
 class BaseModule(nn.Module):
 

@@ -2,13 +2,8 @@
 # __author: zhangxin
 import codecs
 import random
-import math
-import numpy as np
 import copy
-import time
-import json
-from data.TrainDataLoader import TrainDataLoader
-from tqdm import tqdm
+
 
 class TestDataSampler(object):
 
@@ -149,11 +144,7 @@ class TestDataLoader(object):
     def set_sample_mode(self, sample_mode):
         self.sample_mode = sample_mode
 
-if __name__ == "__main__":
-    train_dataloader = TrainDataLoader(in_path="../benchmarks/FB15K237/", batch_size=2000, sampling_mode="unif")
-    test_dataloader = TestDataLoader(in_path="../benchmarks/FB15K237/",entity_set=train_dataloader.entity_set,train_triple = train_dataloader.triple_list,sample_mode="classification")
-    for data in test_dataloader:
-        print(data)
+
 
 
 

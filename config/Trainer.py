@@ -1,18 +1,11 @@
 # _*_ coding:utf-8 _*_
 # __author: zhangxin
 import torch
-import torch.nn as nn
 from torch.autograd import Variable
 import torch.optim as optim
 import os
-import time
-import sys
-import datetime
-import ctypes
-import json
-import numpy as np
-import copy
 from tqdm import tqdm
+import time
 
 
 class Trainer(object):
@@ -92,17 +85,21 @@ class Trainer(object):
 		#训练，并保存进度
 		training_range = tqdm(range(self.train_times))
 		for epoch in training_range:
+			start = time.time()
 			res = 0.0
 			for data in self.data_loader:
 				loss = self.train_one_step(data)
 				res += loss
-				print("epoch:{} | res:{} ".format(epoch,res))
+			end = time.time()
+			print("epoch:{} | res:{} | time:{}".format(epoch,res,end-start))
 			training_range.set_description("Epoch %d | loss: %f" % (epoch, res))
 
 
 			if self.save_steps and self.checkpoint_dir and (epoch + 1) % self.save_steps == 0:
 				print("Epoch %d has finished, saving..." % (epoch))
 				self.model.save_checkpoint(os.path.join(self.checkpoint_dir + "-" + str(epoch) + ".ckpt"))
+
+		#将model的catedory字典保存，以便训练时使用
 
 	def set_model(self, model):
 		self.model = model
