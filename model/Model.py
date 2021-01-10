@@ -3,9 +3,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
 from model.BasicModule import BaseModule
-from sklearn.cluster import KMeans
+from kmeans_pytorch import kmeans
 
 class PTransD(BaseModule):
 
@@ -21,20 +20,22 @@ class PTransD(BaseModule):
                  epsilon=None,
                  batch_size = None,
                  regul_rate = None,
-                 kl_rate = None):
+                 kl_rate = None,
+                 device = "cpu"):
         super(PTransD, self).__init__()
         self.dim_e = dim_e
         self.dim_r = dim_r
         self.k = k
         self.margin = margin
         self.epsilon = epsilon
+        self.batch_size = batch_size
         self.p_norm = p_norm
         self.norm_flag = norm_flag
         self.ent_tot = ent_tot
         self.rel_tot = rel_tot
         self.kl_rate = kl_rate
-        self.batch_size = batch_size
         self.regul_rate = regul_rate
+        self.device = torch.device(device)
 
 
         #存储固定大小的词典的嵌入向量查找表
@@ -45,8 +46,8 @@ class PTransD(BaseModule):
 
         self.category_dict = {}
         self.e_mean_dict = {}
-        self.entity_probability_matrix = torch.zeros(size = (self.k, self.k))
-        self.entity_transfer_probability_matrix = torch.zeros(size = (self.k, self.k))
+        self.entity_probability_matrix = torch.zeros(size = (self.k, self.k)).to(self.device)
+        self.entity_transfer_probability_matrix = torch.zeros(size = (self.k, self.k)).to(self.device)
 
         #向量满足均匀分布U~(-a,a)
         if margin == None or epsilon == None:
@@ -89,6 +90,14 @@ class PTransD(BaseModule):
         else:
             self.margin_flag = False
 
+        if self.regul_rate != None:
+            self.regul_rate = nn.Parameter(torch.Tensor([regul_rate]))
+            self.regul_rate.requires_grad = False
+
+        if self.kl_rate != None:
+            self.kl_rate = nn.Parameter(torch.Tensor([kl_rate]))
+            self.kl_rate .requires_grad = False
+
     #张量补零
     def _resize(self, tensor, axis, size):
         shape = tensor.size()
@@ -121,15 +130,14 @@ class PTransD(BaseModule):
         k       - 指定分簇数量
         matrix     - ndarray(m, n)，m个样本的数据集，每个样本n个属性值
         """
-        data = matrix.weight.data
-        example = KMeans(n_clusters=k)
-        example.fit(data)
-        y = example.labels_ #得到聚类结果
+        data = matrix.weight.to(self.device)
+        cluster_ids_x, cluster_centers = kmeans(X=data, num_clusters=self.k, distance='euclidean', device=self.device)
+
         for i in range(self.ent_tot):
-            self.category_dict[i] = y[i]
-        kc = torch.Tensor(example.cluster_centers_)
+            self.category_dict[i] = cluster_ids_x[i]
+
         for i in range(k):
-            self.e_mean_dict[i] = kc[i]
+            self.e_mean_dict[i] = cluster_centers[i]
 
     def _transfer(self, e, e_transfer, r_transfer,):
         if e.shape[0] != r_transfer.shape[0]:
@@ -152,7 +160,7 @@ class PTransD(BaseModule):
         list = []
         for e in batch:
             list.append(self.category_dict[e.item()])
-        return torch.LongTensor(list)
+        return torch.LongTensor(list).to(self.device)
 
     def hinge_loss(self, p_score, n_score):
         if self.margin_flag == False:
@@ -198,15 +206,15 @@ class PTransD(BaseModule):
 
     def kldiv(self):
         #构建实体向量矩阵
-        matrix = torch.tensor([])
+        matrix = torch.tensor([]).to(self.device)
         for _,mean in self.e_mean_dict.items():
             matrix = torch.cat((matrix,mean.data),0)
         matrix = matrix.view(self.k, self.dim_e)
         #构建实体投影向量矩阵
-        matrix_p = self.ent_transfer(torch.LongTensor([range(0,self.k)])).squeeze()
+        matrix_p = self.ent_transfer(torch.LongTensor([range(0,self.k)]).to(self.device)).squeeze()
 
         #构建概率矩阵
-        q_ij_under = torch.Tensor([0])
+        q_ij_under = self.zero_const
         for i in range(self.k-1):
             for j in range(i+1,self.k):
                 q_ij_under += torch.exp(-torch.norm(matrix_p[i]-matrix_p[j],p=2,dim=0))
@@ -218,11 +226,11 @@ class PTransD(BaseModule):
                 q_ij = torch.div(q_ij_on, q_ij_under)
                 #求e的概率距离矩阵pij
                 if i==j:
-                    p_ij = torch.Tensor([0])
+                    p_ij = self.zero_const
                 else:
                     p_ij_on = torch.exp(-torch.norm(matrix[i]-matrix[j],p=2,dim=0))
-                    p_ij_under = torch.Tensor([0])
-                    p_ji_under = torch.Tensor([0])
+                    p_ij_under = self.zero_const
+                    p_ji_under = self.zero_const
                     for k1 in range(self.k):
                         if k1==i:
                             break
@@ -233,19 +241,22 @@ class PTransD(BaseModule):
                             break
                         else:
                             p_ji_under += torch.exp(-torch.norm(matrix[j] - matrix[k2], p=2, dim=0))
-                    p_ij = torch.div(p_ij_on, 2 * p_ij_under) + torch.div(p_ij_on, 2 * p_ji_under)
+                    p_ij = torch.div(p_ij_on, 2*self.k * p_ij_under) + torch.div(p_ij_on, 2 *self.k* p_ji_under)
 
                 self.entity_probability_matrix[i][j] = p_ij
                 self.entity_probability_matrix[j][i] = p_ij
                 self.entity_transfer_probability_matrix[i][j] = q_ij
                 self.entity_transfer_probability_matrix[j][i] = q_ij
 
+        self.entity_probability_matrix = F.normalize(self.entity_probability_matrix, 2, -1)
+        self.entity_transfer_probability_matrix = F.normalize(self.entity_transfer_probability_matrix, 2, -1)
+
         #kl散度损失
         loss_kl = 0
         for i in range(self.k):
             for j in range(self.k):
                 if (self.entity_transfer_probability_matrix[i][j].item()!=0)and(self.entity_probability_matrix[i][j].item()!=0):
-                    loss_kl += self.entity_probability_matrix[i][j]*(torch.log(self.entity_probability_matrix[i][j])-torch.log(self.entity_transfer_probability_matrix[i][j]))
+                    loss_kl = loss_kl+self.entity_probability_matrix[i][j]*(torch.log(self.entity_probability_matrix[i][j])-torch.log(self.entity_transfer_probability_matrix[i][j]))
         return loss_kl
 
     def regularization(self, data): #正则项
@@ -268,7 +279,7 @@ class PTransD(BaseModule):
                  torch.mean(r_transfer ** 2)) / 6
         return regul
 
-    def predict(self, data):#预测的时候需要将Tensor转换成numpy来进行,Tester.py需要
+    def predict(self, data,):#预测的时候需要将Tensor转换成numpy来进行,Tester.py需要
         batch_h = data['batch_h']
         batch_t = data['batch_t']
         batch_r = data['batch_r']
@@ -276,7 +287,7 @@ class PTransD(BaseModule):
         t = self.ent_embeddings(batch_t)
         r = self.rel_embeddings(batch_r)
         #加载保存的category_dict
-
+        category_transfer = torch.load("checkpoints/trained_categorydict.pth")
         h_transfer = self.ent_transfer(category_transfer(batch_h))
         t_transfer = self.ent_transfer(category_transfer(batch_t))
         r_transfer = self.rel_transfer(batch_r)

@@ -36,7 +36,7 @@ class Tester(object):
             return Variable(torch.LongTensor(list(map(int, x))))
 
     def test_one_step(self, data):
-        return self.model.predict({             #不懂这里为什么需要变量
+        return self.model.predict({
             'batch_h': self.to_var(data['batch_h'], self.use_gpu),
             'batch_t': self.to_var(data['batch_t'], self.use_gpu),
             'batch_r': self.to_var(data['batch_r'], self.use_gpu),

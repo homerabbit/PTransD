@@ -2,6 +2,7 @@ import codecs
 import random
 import numpy as np
 import copy
+from torch.utils.data import dataloader
 
 
 class TrainDataSampler(object):
@@ -103,7 +104,7 @@ class TrainDataLoader(object):
 
     def sample(self):
         # Sbatch:list
-        Sbatch = random.sample(self.triple_list, self.batch_size) #有点问题的，因为sample随机取batch_size一迭代会重复，先放着,一定要该，我觉得不对
+        Sbatch = self.triple_list[self.batch:(self.batch+self.batch_size)]
         Tbatch = {'batch_h': [], 'batch_t': [], 'batch_r': [], 'batch_y': []}
 
         for triple in Sbatch:
@@ -112,6 +113,9 @@ class TrainDataLoader(object):
             else:
                 Tbatch = self.sample_bern(triple, Tbatch)
 
+        self.batch+=1
+        if self.batch ==self.nbatches:
+            random.shuffle(self.triple_list)
         return Tbatch
 
     def sample_unif(self,triple,Tbatch):
@@ -181,5 +185,10 @@ if __name__ == "__main__":
     train_dataloader = TrainDataLoader(in_path="../benchmarks/FB15K237/", batch_size=2000, sampling_mode="unif")
 #    for data in train_dataloader:
 #        print(data)
-    print(len(train_dataloader.entity2id))
-    print(len(train_dataloader.entity_set))
+    print(train_dataloader.nbatches)
+    for i in range(2):
+        step = 0
+        for data in train_dataloader:
+            step+=1
+            print(step)
+        print("-----------------------------------------------------")

@@ -44,7 +44,7 @@ class Trainer(object):
 			'batch_r': self.to_var(data['batch_r'], self.use_gpu),
 			'batch_y': self.to_var(data['batch_y'], self.use_gpu),
 		}) #运行model里面的forward函数，得到损失值(qianxiang
-		loss.backward(retain_graph=True) #反向传播计算梯度
+		loss.backward() #反向传播计算梯度
 		self.optimizer.step() #在优化器下得到参数更新
 		return loss.item() #得到损失值
 
@@ -85,21 +85,22 @@ class Trainer(object):
 		#训练，并保存进度
 		training_range = tqdm(range(self.train_times))
 		for epoch in training_range:
-			start = time.time()
 			res = 0.0
 			for data in self.data_loader:
+				start = time.time()
 				loss = self.train_one_step(data)
 				res += loss
-			end = time.time()
-			print("epoch:{} | res:{} | time:{}".format(epoch,res,end-start))
+				end = time.time()
+				print("epoch:{} | res:{} | time:{}".format(epoch,res,end-start))
 			training_range.set_description("Epoch %d | loss: %f" % (epoch, res))
 
 
 			if self.save_steps and self.checkpoint_dir and (epoch + 1) % self.save_steps == 0:
 				print("Epoch %d has finished, saving..." % (epoch))
-				self.model.save_checkpoint(os.path.join(self.checkpoint_dir + "-" + str(epoch) + ".ckpt"))
+				self.model.save_checkpoint(os.path.join(self.checkpoint_dir + "-" + str(epoch) + ".pth"))
 
-		#将model的catedory字典保存，以便训练时使用
+		#将model的catedory字典保存，以便测试时使用
+		self.model.save_checkpoint(self.model.category_dict,"checkpoints/trained_categorydict.pth")
 
 	def set_model(self, model):
 		self.model = model
